@@ -8,12 +8,12 @@ The Overview dashboard includes a SQL query that joins request counts, applicati
 
 ## Run
 
-Requires Docker with Compose, Git, and Python 3.11. Start Docker, then run:
+Requires Docker with Compose, Git, and Python 3.9+. Start Docker, then run:
 
 ```bash
 git clone https://github.com/killme2008/greptimedb-observability-playground.git
 cd greptimedb-observability-playground
-python3.11 demo.py up
+python3 demo.py up
 ```
 
 The first run downloads pinned images. The load generator starts shopping traffic automatically; allow time for telemetry to arrive.
@@ -37,9 +37,9 @@ Switch dashboard languages using **English / 简体中文** at the top. Time ran
 With the payment failure flag off:
 
 ```bash
-python3.11 verify.py
-python3.11 demo.py logs otel-collector init-flows
-python3.11 demo.py down
+python3 verify.py
+python3 demo.py logs otel-collector init-flows
+python3 demo.py down
 ```
 
 Verification checks a checkout, telemetry ingestion, and all 80 data panels across both languages. It exits nonzero on failure; it does not test browser interactions. `down` removes this project's containers and retains the GreptimeDB data volume.

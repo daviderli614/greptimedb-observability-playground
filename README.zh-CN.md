@@ -8,12 +8,12 @@
 
 ## 运行
 
-需要 Docker（含 Compose）、Git 和 Python 3.11。启动 Docker 后执行：
+需要 Docker（含 Compose）、Git 和 Python 3.9+。启动 Docker 后执行：
 
 ```bash
 git clone https://github.com/killme2008/greptimedb-observability-playground.git
 cd greptimedb-observability-playground
-python3.11 demo.py up
+python3 demo.py up
 ```
 
 首次运行会下载固定版本的镜像。负载生成器自动产生购物流量，遥测数据需要一段时间写入。
@@ -37,9 +37,9 @@ python3.11 demo.py up
 关闭支付故障开关后执行：
 
 ```bash
-python3.11 verify.py
-python3.11 demo.py logs otel-collector init-flows
-python3.11 demo.py down
+python3 verify.py
+python3 demo.py logs otel-collector init-flows
+python3 demo.py down
 ```
 
 验证脚本检查下单、遥测入库和中英文共 80 个数据面板，失败时返回非零退出码，不验证浏览器交互。`down` 移除本项目容器，保留 GreptimeDB 数据卷。
