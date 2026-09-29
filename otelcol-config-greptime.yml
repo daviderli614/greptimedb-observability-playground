@@ -1,5 +1,23 @@
 # 作为 otelcol-config-extras.yml 叠加在 demo 的基础配置上。
+# 只保留「业务服务 → otel-collector → 外部 GreptimeDB」这一条链路：
+#   - 各业务服务的 OTLP traces/logs/metrics 全部通过 OTLP HTTP 写入外部已部署的 GreptimeDB；
+#   - 使用 HTTP Basic Auth 携带账号密码。
+#
+# 需要注入到 otel-collector 容器的环境变量（compose.greptime.yaml 会负责注入）：
+#   GREPTIMEDB_ENDPOINT  例: http://your-greptime-host:4000/v1/otlp
+#   GREPTIMEDB_USERNAME  GreptimeDB 用户名
+#   GREPTIMEDB_PASSWORD  GreptimeDB 密码
+#
+# 如果 GreptimeDB 未开启认证：删除 extensions、各 exporter 里的 auth 以及 service.extensions。
+#
 # Collector 合并配置时数组是替换而非追加，所以 pipelines 里的 receivers / exporters 要写全。
+
+extensions:
+  basicauth/greptimedb:
+    client_auth:
+      username: ${env:GREPTIMEDB_USERNAME}
+      password: ${env:GREPTIMEDB_PASSWORD}
+
 processors:
   transform/http_body_sizes:
     error_mode: propagate
@@ -14,30 +32,40 @@ processors:
 
 exporters:
   otlphttp/traces:
-    endpoint: http://greptimedb:4000/v1/otlp
+    endpoint: ${env:GREPTIMEDB_ENDPOINT}
     headers:
+      # GreptimeDB 侧解析 traces 的 pipeline；若外部库没有该 pipeline，可去掉此 header 或先创建 pipeline。
       x-greptime-pipeline-name: greptime_trace_v1
       x-greptime-hints: ttl=7d
+    auth:
+      authenticator: basicauth/greptimedb
     tls:
       insecure: true
   otlphttp/logs:
-    endpoint: http://greptimedb:4000/v1/otlp
+    endpoint: ${env:GREPTIMEDB_ENDPOINT}
+    auth:
+      authenticator: basicauth/greptimedb
     tls:
       insecure: true
   otlphttp/metrics:
-    endpoint: http://greptimedb:4000/v1/otlp
+    endpoint: ${env:GREPTIMEDB_ENDPOINT}
+    auth:
+      authenticator: basicauth/greptimedb
     tls:
       insecure: true
 
 service:
+  extensions: [basicauth/greptimedb]
   pipelines:
     traces:
       receivers: [otlp]
       processors: [resource_detection, memory_limiter, transform/sanitize_spans, gen_ai_normalizer, transform/redact_sensitive_data, transform/http_body_sizes]
       exporters: [otlphttp/traces, span_metrics]
     metrics:
-      # 去掉了基础配置里的 host_metrics：主机指标改由 node_exporter + Prometheus pull 提供
-      receivers: [docker_stats, http_check/frontend-proxy, nginx, otlp, redis, postgresql, span_metrics]
+      # 只保留业务服务 OTLP 指标与 span 派生指标；如需 demo 自带的基础设施指标
+      # (postgres/redis/nginx/docker)，把 receivers 改回：
+      #   [docker_stats, http_check/frontend-proxy, nginx, otlp, redis, postgresql, span_metrics]
+      receivers: [otlp, span_metrics]
       exporters: [otlphttp/metrics]
     logs:
       receivers: [otlp]
