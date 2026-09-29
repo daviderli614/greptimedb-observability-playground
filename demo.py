@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import platform
 import subprocess
 import sys
 
@@ -34,7 +35,7 @@ def render():
     images = json.loads((ROOT / 'images.lock.json').read_text())
     config['name'] = PROJECT
     config['networks']['default']['name'] = PROJECT
-    ports = {'frontend-proxy': {8080: 18080, 10000: 18081}, 'grafana': {3000: 13000}, 'greptimedb': {4000: 24000, 4001: 24001, 4002: 24002, 4003: 24003}}
+    ports = {'frontend-proxy': {8080: 18080, 10000: 18081}}
     for name, service in config['services'].items():
         service.pop('container_name', None)
         service['image'] = images[name]
@@ -48,6 +49,10 @@ def render():
                 prefix = UPSTREAM / 'greptime'
                 if source.is_relative_to(prefix):
                     volume['source'] = str(ROOT / source.relative_to(prefix))
+                # Docker Desktop on macOS cannot apply rslave propagation to the
+                # host root, which node-exporter mounts as /:/host:ro,rslave.
+                if platform.system() == 'Darwin':
+                    volume.get('bind', {}).pop('propagation', None)
     for name, volume in config.get('volumes', {}).items():
         volume['name'] = f'{PROJECT}_{name}'
     CONFIG.write_text(json.dumps(config, indent=2) + '\n')
@@ -75,8 +80,6 @@ def main():
     subprocess.run(command, check=True)
     if args.action == 'up':
         print('Shop: http://localhost:18080')
-        print('Grafana: http://localhost:13000/d/astronomy-shop-greptimedb')
-        print('GreptimeDB: http://localhost:24000/dashboard')
 
 
 if __name__ == '__main__':
