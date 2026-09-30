@@ -14,7 +14,7 @@
 启动 Docker 后执行：
 
 ```bash
-git clone https://github.com/killme2008/greptimedb-observability-playground.git
+git clone https://github.com/daviderli614/greptimedb-observability-playground.git
 cd greptimedb-observability-playground
 
 export GREPTIMEDB_ENDPOINT='http://你的GreptimeDB地址:4000/v1/otlp'

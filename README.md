@@ -14,7 +14,7 @@ Use the OpenTelemetry Astronomy Shop to generate traffic, with metrics, logs, an
 Start Docker, then run:
 
 ```bash
-git clone https://github.com/killme2008/greptimedb-observability-playground.git
+git clone https://github.com/daviderli614/greptimedb-observability-playground.git
 cd greptimedb-observability-playground
 
 export GREPTIMEDB_ENDPOINT='http://your-greptime-host:4000/v1/otlp'
