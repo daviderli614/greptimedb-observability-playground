@@ -99,6 +99,8 @@ def main():
     for name, statement in {
         'server spans': f'SELECT COUNT(*) FROM opentelemetry_traces WHERE {namespace} AND span_kind = \'SPAN_KIND_SERVER\' AND "timestamp" > now() - INTERVAL \'5 minutes\'',
         'application logs': f'SELECT COUNT(*) FROM opentelemetry_logs WHERE {log_namespace} AND "timestamp" > now() - INTERVAL \'5 minutes\'',
+        'host metrics': 'SELECT COUNT(*) FROM node_cpu_seconds_total WHERE greptime_timestamp > now() - INTERVAL \'5 minutes\'',
+        'flow output': 'SELECT COUNT(*) FROM service_error_rate_1m WHERE time_window > now() - INTERVAL \'5 minutes\'',
     }.items():
         count = sql(statement)[0][0]
         if count == 0:

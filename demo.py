@@ -17,6 +17,31 @@ PROJECT = 'greptime-demo'
 CONFIG = RUNTIME / 'compose.json'
 
 
+def greptime_base_url(endpoint):
+    """Derive the GreptimeDB HTTP base URL from an OTLP endpoint like http://host:4000/v1/otlp."""
+    for suffix in ('/v1/otlp', '/v1/otlp/'):
+        if endpoint.endswith(suffix):
+            return endpoint[: -len(suffix)]
+    return endpoint.rstrip('/') or 'http://localhost:4000'
+
+
+def yaml_quote(value):
+    return "'" + value.replace("'", "''") + "'"
+
+
+def render_prometheus_config():
+    """Render .runtime/prometheus.yml with the external remote_write URL and Basic Auth."""
+    base_url = greptime_base_url(os.environ.get('GREPTIMEDB_ENDPOINT', ''))
+    username = os.environ.get('GREPTIMEDB_USERNAME', '')
+    password = os.environ.get('GREPTIMEDB_PASSWORD', '')
+    remote_write = 'remote_write:\n  - url: ' + yaml_quote(base_url.rstrip('/') + '/v1/prometheus/write?db=public')
+    if username or password:
+        remote_write += '\n    basic_auth:\n      username: ' + yaml_quote(username) + '\n      password: ' + yaml_quote(password)
+    template = (ROOT / 'prometheus.yml').read_text().replace('__REMOTE_WRITE__', remote_write)
+    (RUNTIME / 'prometheus.yml').write_text(template.rstrip() + '\n')
+    return base_url
+
+
 def render():
     RUNTIME.mkdir(exist_ok=True)
     if not UPSTREAM.exists():
@@ -25,10 +50,13 @@ def render():
     revision = subprocess.check_output(['git', '-C', str(UPSTREAM), 'rev-parse', 'HEAD'], text=True).strip()
     if revision != REVISION:
         raise RuntimeError(f'{UPSTREAM} is at {revision}; expected {REVISION}. Existing checkout was not changed.')
+    base_url = render_prometheus_config()
     env = dict(
         os.environ,
         OTEL_COLLECTOR_CONFIG_EXTRAS=str(ROOT / 'otelcol-config-greptime.yml'),
         PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT='http://localhost:18080/otlp-http/v1/traces',
+        GREPTIMEDB_HTTP=base_url,
+        GREPTIMEDB_PROMETHEUS_CONFIG=str(RUNTIME / 'prometheus.yml'),
     )
     command = ['docker', 'compose', '-f', str(UPSTREAM / 'compose.yaml'), '-f', str(ROOT / 'compose.greptime.yaml'), 'config', '--format', 'json']
     config = json.loads(subprocess.check_output(command, cwd=UPSTREAM, env=env, text=True))

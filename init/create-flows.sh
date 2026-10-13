@@ -1,8 +1,14 @@
 #!/bin/sh
 set -e
 GT=${GREPTIMEDB_HTTP:-http://greptimedb:4000}
+AUTH_ARGS=""
+if [ -n "${GREPTIMEDB_USERNAME:-}" ] || [ -n "${GREPTIMEDB_PASSWORD:-}" ]; then
+  AUTH_ARGS="--user ${GREPTIMEDB_USERNAME:-}:${GREPTIMEDB_PASSWORD:-}"
+fi
 sql() {
+  # shellcheck disable=SC2086
   curl --fail-with-body --silent --show-error --connect-timeout 5 --max-time 30 \
+    $AUTH_ARGS \
     -X POST "$GT/v1/sql" --data-urlencode "sql=$1"
 }
 
