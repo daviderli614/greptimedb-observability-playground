@@ -8,6 +8,7 @@ from pathlib import Path
 import platform
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parent
 RUNTIME = ROOT / '.runtime'
@@ -86,6 +87,52 @@ def render():
     CONFIG.write_text(json.dumps(config, indent=2) + '\n')
 
 
+def wait_ready(timeout=180):
+    """Wait for the stack to be ready without `compose up --wait`.
+
+    `docker compose up --wait` returns non-zero as soon as a one-shot service
+    such as `init-flows` exits, even when it exits successfully. So we poll the
+    container state ourselves: long-running services must be running (and
+    healthy when they have a healthcheck), while one-shot services must have
+    exited with code 0.
+    """
+    config = json.loads(CONFIG.read_text())
+    one_shot = {
+        name for name, service in config['services'].items()
+        if not service.get('restart')
+    }
+    ps = ['docker', 'compose', '-p', PROJECT, '-f', str(CONFIG), 'ps', '-a', '--format', 'json']
+    deadline = time.monotonic() + timeout
+    while True:
+        containers = {}
+        for line in subprocess.check_output(ps, text=True).splitlines():
+            container = json.loads(line)
+            containers.setdefault(container.get('Service'), []).append(container)
+        pending = []
+        for name in config['services']:
+            container = next(iter(containers.get(name) or []), {})
+            state = container.get('State', '')
+            if name in one_shot:
+                if state != 'exited':
+                    pending.append(f'{name} is {state or "not started"}')
+                    continue
+                exit_code = container.get('ExitCode')
+                if exit_code is None or int(exit_code) != 0:
+                    raise RuntimeError(
+                        f'{name} exited with code {exit_code}; '
+                        f'see logs with: python3 demo.py logs {name}'
+                    )
+            else:
+                health = container.get('Health', '')
+                if state != 'running' or health not in ('', 'healthy'):
+                    pending.append(f'{name} is {state or "not started"}' + (f'/{health}' if health else ''))
+        if not pending:
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f'timed out after {timeout}s waiting for: {", ".join(pending)}')
+        time.sleep(2)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['up', 'down', 'ps', 'logs', 'config'])
@@ -100,13 +147,14 @@ def main():
         return
     command = ['docker', 'compose', '-p', PROJECT, '-f', str(CONFIG)]
     if args.action == 'up':
-        command += ['up', '-d', '--no-build', '--wait', '--wait-timeout', '180']
+        command += ['up', '-d', '--no-build']
     elif args.action == 'logs':
         command += ['logs', '--tail', '100', *args.services]
     else:
         command += [args.action]
     subprocess.run(command, check=True)
     if args.action == 'up':
+        wait_ready()
         print('Shop: http://localhost:18080')
 
 
