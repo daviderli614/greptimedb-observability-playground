@@ -1,17 +1,59 @@
-# 叠加在 opentelemetry-demo 的 compose.yaml 之上。
-# 只保留「业务服务 → otel-collector → 外部 GreptimeDB」这一条链路：
-#   - 不部署本地 GreptimeDB / Prometheus / node-exporter / Grafana / Flow；
-#   - 仅把外部 GreptimeDB 的连接信息通过环境变量注入 otel-collector。
+# 叠加在 opentelemetry-demo 的 compose.yaml 之上，统一写入「已部署的外部 GreptimeDB」。
+# 三条链路：
+#   ① 业务服务 → otel-collector → GreptimeDB（OTLP HTTP + Basic Auth）
+#   ② node-exporter → prometheus → GreptimeDB（Prometheus 拉取后 remote write）
+#   ④ init-flows → GreptimeDB（SQL 创建 Flow）
 #
-# 用法（在 opentelemetry-demo 仓库根目录）：
+# 用法（在 opentelemetry-demo 仓库根目录，或直接用 demo.py）：
 #   export GREPTIMEDB_ENDPOINT='http://your-greptime-host:4000/v1/otlp'
 #   export GREPTIMEDB_USERNAME='your-user'
 #   export GREPTIMEDB_PASSWORD='your-password'
-#   OTEL_COLLECTOR_CONFIG_EXTRAS=./greptime/otelcol-config-greptime.yml \
-#   docker compose -f compose.yaml -f greptime/compose.greptime.yaml up -d
+#   python3 demo.py up
+#
+# 注意：GREPTIMEDB_HTTP / GREPTIMEDB_PROMETHEUS_CONFIG 由 demo.py 依据
+# GREPTIMEDB_ENDPOINT 推导并注入，Prometheus 配置也由 demo.py 渲染到 .runtime/。
 services:
   otel-collector:
     environment:
       GREPTIMEDB_ENDPOINT: ${GREPTIMEDB_ENDPOINT:?GREPTIMEDB_ENDPOINT is required, e.g. http://host:4000/v1/otlp}
       GREPTIMEDB_USERNAME: ${GREPTIMEDB_USERNAME:?GREPTIMEDB_USERNAME is required}
       GREPTIMEDB_PASSWORD: ${GREPTIMEDB_PASSWORD:?GREPTIMEDB_PASSWORD is required}
+
+  # Prometheus 只做 pull：抓 node_exporter 的主机指标，样本通过 remote write
+  # 写进外部 GreptimeDB，本地 TSDB 只保留 2 小时。
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2h
+    volumes:
+      - ${GREPTIMEDB_PROMETHEUS_CONFIG:?GREPTIMEDB_PROMETHEUS_CONFIG is required}:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.9.1
+    container_name: node-exporter
+    command:
+      - --path.rootfs=/host
+    pid: host
+    network_mode: host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  # 建 Flow：每 30 秒计算各服务的服务端 span 数与错误数，结果写入 sink 表
+  init-flows:
+    image: curlimages/curl:8.10.1
+    volumes:
+      - ./greptime/init:/init:ro
+    environment:
+      GREPTIMEDB_HTTP: ${GREPTIMEDB_HTTP:?GREPTIMEDB_HTTP is required, e.g. http://host:4000}
+      GREPTIMEDB_USERNAME: ${GREPTIMEDB_USERNAME:?GREPTIMEDB_USERNAME is required}
+      GREPTIMEDB_PASSWORD: ${GREPTIMEDB_PASSWORD:?GREPTIMEDB_PASSWORD is required}
+    entrypoint: ["/bin/sh", "/init/create-flows.sh"]
+    depends_on:
+      otel-collector:
+        condition: service_started
