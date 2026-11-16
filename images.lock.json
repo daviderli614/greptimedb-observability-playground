@@ -11,7 +11,7 @@
   "frontend-proxy": "greptime-registry.cn-hangzhou.cr.aliyuncs.com/open-telemetry/demo:latest-frontend-proxy",
   "image-provider": "greptime-registry.cn-hangzhou.cr.aliyuncs.com/open-telemetry/demo:latest-image-provider",
   "init-flows": "greptime-registry.cn-hangzhou.cr.aliyuncs.com/open-telemetry/curl:8.10.1",
-  "load-generator": "greptime-registry.cn-hangzhou.cr.aliyuncs.com/open-telemetry/demo:latest-load-generator",
+  "load-generator": "greptime-registry.cn-hangzhou.cr.aliyuncs.com/open-telemetry/demo:2026-09-13-load-generator",
   "node-exporter": "greptime-registry.cn-hangzhou.cr.aliyuncs.com/open-telemetry/node-exporter:v1.9.1",
   "otel-collector": "greptime-registry.cn-hangzhou.cr.aliyuncs.com/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.159.0",
   "payment": "greptime-registry.cn-hangzhou.cr.aliyuncs.com/open-telemetry/demo:latest-payment",
